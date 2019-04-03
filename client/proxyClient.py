@@ -3,12 +3,11 @@ import sys
 import requests
 
 if __name__ == "__main__":
-	if len(sys.argv) < 3:
-		print ("USAGE {} [MYPORT] [PROXY_PORT]".format(argv[0]))
+	if len(sys.argv) < 2:
+		print ("USAGE {} [PROXY_PORT]".format(argv[0]))
 		exit(0)
 
-	port = int(sys.argv[2])
-	myport = int(sys.argv[1])
+	port = int(sys.argv[1])
 	# servFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 	# servFd.connect(('0.0.0.0',port))
