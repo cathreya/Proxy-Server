@@ -1,6 +1,7 @@
 import socket
 import sys
 import threading
+from datetime import datetime
 
 
 class ProxyServer:
@@ -9,6 +10,7 @@ class ProxyServer:
 		self.port = port
 		self.maxMessageSize = 1000000
 		self.cache = {}
+		self.cache_timestamp = {}
 
 		try:
 			self.servFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -53,29 +55,54 @@ class ProxyServer:
 		# print(cliReq)
 
 		addr, path, port = self.getDestServer(cliReq)
-		print("Address: " + addr + "\nPath: " + path + "\nPort: " + str(port))
+		# print("Address: " + addr + "\nPath: " + path + "\nPort: " + str(port))
 		requestUrl = "http://" + addr + ":" + str(port) + path
 		
 		rep = cliReq.replace(requestUrl, path)
-		print(rep)
+		# print(rep)
+
+
+		# First thing the server does is check if the requested data is in the
+		# cache (checkCache) or not. If it is, it checks if it's modified since: 
+		# then it re-requests the data (checkCache returns False). If not 
+		# modified, it sends the data from cache (getCache).
+		# If it is not in cache, we add timestamp to list of requests 
+		# (addCache) and check if three requests were made in the last 5 minutes. 
+		# If yes, we cache it (addCache). Since there's a maximum of 3 cache values 
+		# allowed, if we have to remove a cache value for making space (addCache) 
+		# we look at the oldest timestamp.
 
 		# Won't work with large messages yet
 		if self.checkCache(requestUrl):
+			# All this interface is concerned with is getting the data. Validation, 
+			# etc is handled by the function
 			data = self.getCache(requestUrl)
+			print("-"*20 + "\nDATA FROM CACHE\n" + "-"*20)
+			print(data)
 			clientFd.sendall(data)
+			return
 
 		try:
 			destFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			destFd.settimeout(1)
-			print(addr,port)
+			# print(addr,port)
 			destFd.connect((addr,port))
 			destFd.sendall(rep.encode("utf_8"))
+
+			print("-"*20 + "\nDATA SENT TO SERVER FROM PROXY\n" + "-"*20)
+			print(rep)
+
 			dataBegin = True
+			
+			print("-"*20 + "\nPART DATA RECEIVED TO PROXY FROM SERVER\n" + "-"*20)
 			while True:
 				data = destFd.recv(self.maxMessageSize)
 				if(len(data) > 0):
 					print(data)
+
+					# Add to cache - if validated
 					self.addCache(requestUrl, data, dataBegin)
+					
 					clientFd.sendall(data)
 					dataBegin = False
 				else:
@@ -95,13 +122,65 @@ class ProxyServer:
 				clientFd.close()
 
 	def checkCache(self, requestUrl):
-		return False
+		'''
+		Checks if data has been requested in the last 5 minutes. Updates 
+		cache for timeouts.
+		'''
+
+		if not requestUrl in self.cache_timestamp:
+			self.cache_timestamp[requestUrl] = []
+		
+		# Adding the time to list
+		self.cache_timestamp[requestUrl].append(datetime.now())
+
+		if not requestUrl in self.cache:
+			return False
+
+		# Check for outdated
+
+		return True
 
 	def getCache(self, requestUrl):
-		return None
+		'''
+		Returns the data stored in the cache 
+		'''
+	
+		return self.cache[requestUrl]
 
 	def addCache(self, requestUrl, data, dataBegin):
-		pass
+		'''
+		Checks if data has been requested (more than) thrice in the last 5 
+		minutes. If so, it adds the data to the cache.
+		'''
+
+		# Return if less than 3 requests
+		if len(self.cache_timestamp[requestUrl]) < 3:
+			return
+		
+		# Return if 3 requests were over 5 minutes
+		timediff = datetime.now() - self.cache_timestamp[requestUrl][-3]
+		if timediff.seconds > 300:
+			return 
+
+
+		# Add data to cache
+		print("*****Adding data to cache*****")
+		if dataBegin:
+			if not requestUrl in self.cache:
+				self.cache[requestUrl] = ""
+			self.cache[requestUrl] = data
+		else:
+			self.cache[requestUrl] += data
+	
+
+		# If the cache now contains 4 values, remove oldest one
+		if len(self.cache) == 4:
+			oldkey = requestUrl
+			for key in self.cache:
+				if self.cache_timestamp[key][-1] < self.cache_timestamp[oldkey][-1]:
+					oldkey = key
+			del self.cache[oldkey]
+
 
 	def blacklisted(self, host):
 		blacklist_file = "blacklist.txt"
@@ -114,11 +193,11 @@ class ProxyServer:
 			return False # return not blacklisted
 
 		ip = socket.gethostbyname(host) # get ip of client requested url
-		ip = parseBlack(ip)
+		ip = self.parseBlack(ip)
 
 		for cidr in b_list:
 			flag = True
-			c = parseBlack(cidr)
+			c = self.parseBlack(cidr)
 
 			for i in range(len(c)):
 				if c[i] != ip[i]:
