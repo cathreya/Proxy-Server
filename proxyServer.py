@@ -2,11 +2,12 @@ import socket
 import sys
 import threading
 from datetime import datetime
-
+import ipaddress
 
 class ProxyServer:
 
 	def __init__(self,port):
+		self.immune = False
 		self.port = port
 		self.maxMessageSize = 1000000
 		self.cache = {}
@@ -42,11 +43,23 @@ class ProxyServer:
 		print(auth)
 		print(tok)
 
-		return auth.strip() == tok.strip()
+		if auth.split(" ")[1].strip() == tok.strip():
+			self.immune = True
+			return True
+		elif auth.split(" ")[0].strip() == tok.strip():
+			return True
+		else:
+			return False
 
 	def acceptClients(self):
 		while(True):
+			self.immune = False
 			clientFd, clientAddr = self.servFd.accept()
+			if(clientAddr[1] < 20100):
+				print("Outside IIIT, Terminating")
+				clientFd.close()
+				continue
+
 			print("Connected to {}".format(clientAddr))
 
 			clientThread = threading.Thread(target=self.handleClient, args=(clientFd,clientAddr))
@@ -69,13 +82,19 @@ class ProxyServer:
 		addr,path,port,auth = self.parseRequest(cliReq)
 		requestUrl = "http://" + addr + ":" + str(port) + path
 
+
+
 		if not self.authenticate(auth):
 			print("Auth Failed")
 			clientFd.sendall(b"HTTP/1.1 403 Forbidden\nContent-Type: text/plain\nContent-Length: 21\n\nInvalid Authorization")
 			clientFd.close()
 			return
 
-
+		if(not self.immune and self.blacklisted(addr)):
+			print("Trying to Access blacklisted IP")
+			clientFd.sendall(b"HTTP/1.1 403 Forbidden\nContent-Type: text/plain\nContent-Length: 31\n\nTrying to Access blacklisted IP")
+			clientFd.close()
+			return
 		
 		rep = cliReq.replace(requestUrl, path)
 		print(rep)
@@ -91,43 +110,60 @@ class ProxyServer:
 		# allowed, if we have to remove a cache value for making space (addCache) 
 		# we look at the oldest timestamp.
 		try:
-			destFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			destFd.settimeout(1)
-			# print(addr,port)
-			destFd.connect((addr,port))
 		
 			if self.checkCache(requestUrl):
+				destFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+				destFd.settimeout(1)
+				# print(addr,port)
+				destFd.connect((addr,port))
+
 				# All this interface is concerned with is getting the data. Validation, 
 				# etc is handled by the function
 
 				headerdate = self.getHeaderDate(requestUrl)
 
 				# print(headerdate)
-				copy_rep = cliReq.replace(requestUrl, path) + "\n" + headerdate
+				copy_rep = rep.rstrip() + "\r\n" + headerdate + "\r\n\r\n"
 				# print(copy_rep)
-				destFd.sendall(copy_rep.encode("utf_8"))
+				print(copy_rep.encode("utf_8"))
+				print("FINISHED PRINTING RAW")
+				print(rep.encode("utf_8"))
+				print("FINISHED PRINTING RAW")
 				
-				# while True:
-				fakedata = destFd.recv(self.maxMessageSize)
-					# if(len(data) > 0):
-				print(fakedata)
-					# else:
-					# 	break
+				destFd.sendall(copy_rep.encode("utf_8"))
 
+				fakedata=""
+				while True:
+					tmpdata = (destFd.recv(self.maxMessageSize)).decode("utf_8")
+					fakedata += tmpdata
+					if(len(tmpdata) > 0):
+						print(tmpdata)
+					else:
+						break
 
-
-				code = fakedata.decode("utf_8").split(" ")[1]
+				code = fakedata.split(" ")[1]
+				# code = fakedata.decode("utf_8").split(" ")[1]
 				
 				if code == '304':
-					print("YOU SHALL have to pass")
 					pass
 				else:
 					data = self.getCache(requestUrl)
 					print("-"*20 + "\nDATA FROM CACHE\n" + "-"*20)
 					print(data)
 					clientFd.sendall(data)
+					destFd.close()
 					return
+				
+				destFd.close()
 
+
+			destFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			destFd.settimeout(1)
+			# print(addr,port)
+			destFd.connect((addr,port))
+		
+
+			print("-"*20 + "\nNO CACHE\n" + "-"*20)
 			destFd.sendall(rep.encode("utf_8"))
 
 			print("-"*20 + "\nDATA SENT TO SERVER FROM PROXY\n" + "-"*20)
@@ -222,58 +258,27 @@ class ProxyServer:
 			del self.cache[oldkey]
 
 
-	def blacklisted(self, host):
+	def blacklisted(self, client_ip):
+		'''
+		returns True if blacklisted
+		'''
+
 		blacklist_file = "blacklist.txt"
 
 		try:
 			with open(blacklist_file, 'r') as f:
-				b_list = f.readlines() # read file into list
-		except IOError:
-			print("{} not found; unable to check for blacklisting".format(blacklist_file))
-			return False # return not blacklisted
+				black_list = f.readlines()
+		except Error:
+			print("Error trying to read the files")
+			return False
 
-		ip = socket.gethostbyname(host) # get ip of client requested url
-		ip = self.parseBlack(ip)
+		for ip in black_list:
+			list_black = [str(ipaddr) for ipaddr in ipaddress.IPv4Network(str(ip))]
 
-		for cidr in b_list:
-			flag = True
-			c = self.parseBlack(cidr)
+			if client_ip in list_black:
+				return True
 
-			for i in range(len(c)):
-				if c[i] != ip[i]:
-					flag = False
-					break 
-
-			if flag:
-				return flag
-					
-		return flag
-
-	def parseBlack(self, address):
-		cidr_flag = address.find("/")
-
-		if cidr_flag == -1:
-			domain = address
-			cidr_flag = False
-		else:
-			domain = address[:cidr_flag]
-			sig = int(address[(cidr_flag + 1):])
-		
-		domain = domain.split(".")
-		for i in range(len(domain)):
-			domain[i] = format(int(domain[i]), 'b') # convert segment to binary string
-
-			temp = ""
-			if len(domain[i]) < 8:
-				for j in range(8 - len(domain[i])):
-					temp += "0"
-			domain[i] = temp + domain[i] # convert to 8 bit binary string
-		domain = "".join(domain)
-
-		if cidr_flag:
-			return domain[:sig] # cutoff at sig if cidr
-		
-		return domain
+		return False
 
 
 	def parseRequest(self, request):
@@ -324,13 +329,13 @@ class ProxyServer:
 	def getHeaderDate(self, requestUrl):
 		dat = self.cache_timestamp[requestUrl][-1]
 		headerdate = "If-Modified-Since "
-		headerdate += str(dat.strftime("%A")) + ", "
-		headerdate += str(dat.day) + " "
-		headerdate += str(dat.month) + " "
-		headerdate += str(dat.year) + " "
-		headerdate += str(dat.hour) + ":"
-		headerdate += str(dat.minute) + ":"
-		headerdate += str(dat.second) + " IST"
+		headerdate += str(dat.strftime("%a")) + ", "
+		headerdate += str(dat.strftime("%d")) + " "
+		headerdate += str(dat.strftime("%b")) + " "
+		headerdate += str(dat.strftime("%Y")) + " "
+		headerdate += str(dat.strftime("%H")) + ":"
+		headerdate += str(dat.strftime("%M")) + ":"
+		headerdate += str(dat.strftime("%S")) + " GMT"
 
 		return headerdate
 
