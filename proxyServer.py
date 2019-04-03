@@ -65,9 +65,9 @@ class ProxyServer:
 
 
 		# print("Address: " + addr + "\nPath: " + path + "\nPort: " + str(port))
-		requestUrl = "http://" + addr + ":" + str(port) + path
 
 		addr,path,port,auth = self.parseRequest(cliReq)
+		requestUrl = "http://" + addr + ":" + str(port) + path
 
 		if not self.authenticate(auth):
 			print("Auth Failed")
@@ -78,7 +78,7 @@ class ProxyServer:
 
 		
 		rep = cliReq.replace(requestUrl, path)
-		# print(rep)
+		print(rep)
 
 
 		# First thing the server does is check if the requested data is in the
@@ -90,22 +90,44 @@ class ProxyServer:
 		# If yes, we cache it (addCache). Since there's a maximum of 3 cache values 
 		# allowed, if we have to remove a cache value for making space (addCache) 
 		# we look at the oldest timestamp.
-
-		# Won't work with large messages yet
-		if self.checkCache(requestUrl):
-			# All this interface is concerned with is getting the data. Validation, 
-			# etc is handled by the function
-			data = self.getCache(requestUrl)
-			print("-"*20 + "\nDATA FROM CACHE\n" + "-"*20)
-			print(data)
-			clientFd.sendall(data)
-			return
-
 		try:
 			destFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			destFd.settimeout(1)
 			# print(addr,port)
 			destFd.connect((addr,port))
+		
+			if self.checkCache(requestUrl):
+				# All this interface is concerned with is getting the data. Validation, 
+				# etc is handled by the function
+
+				headerdate = self.getHeaderDate(requestUrl)
+
+				# print(headerdate)
+				copy_rep = cliReq.replace(requestUrl, path) + "\n" + headerdate
+				# print(copy_rep)
+				destFd.sendall(copy_rep.encode("utf_8"))
+				
+				# while True:
+				fakedata = destFd.recv(self.maxMessageSize)
+					# if(len(data) > 0):
+				print(fakedata)
+					# else:
+					# 	break
+
+
+
+				code = fakedata.decode("utf_8").split(" ")[1]
+				
+				if code == '304':
+					print("YOU SHALL have to pass")
+					pass
+				else:
+					data = self.getCache(requestUrl)
+					print("-"*20 + "\nDATA FROM CACHE\n" + "-"*20)
+					print(data)
+					clientFd.sendall(data)
+					return
+
 			destFd.sendall(rep.encode("utf_8"))
 
 			print("-"*20 + "\nDATA SENT TO SERVER FROM PROXY\n" + "-"*20)
@@ -155,8 +177,6 @@ class ProxyServer:
 
 		if not requestUrl in self.cache:
 			return False
-
-		# Check for outdated
 
 		return True
 
@@ -300,6 +320,19 @@ class ProxyServer:
 
 		
 		return (addr,path,port,auth)
+
+	def getHeaderDate(self, requestUrl):
+		dat = self.cache_timestamp[requestUrl][-1]
+		headerdate = "If-Modified-Since "
+		headerdate += str(dat.strftime("%A")) + ", "
+		headerdate += str(dat.day) + " "
+		headerdate += str(dat.month) + " "
+		headerdate += str(dat.year) + " "
+		headerdate += str(dat.hour) + ":"
+		headerdate += str(dat.minute) + ":"
+		headerdate += str(dat.second) + " IST"
+
+		return headerdate
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:

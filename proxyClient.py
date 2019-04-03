@@ -27,7 +27,9 @@ if __name__ == "__main__":
 	proxy = {"http": proxyaddr, 
 			 "https": sproxyaddr}
 
-	r = requests.get('http://127.0.0.1:7201/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflatnot"))
+	# r = requests.get('http://127.0.0.1:7201', proxies = proxy, auth=("proxy@proxy","theearthisflat"))
+	r = requests.get('http://127.0.0.1:7201/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflat"))
+	# r = requests.get('http://127.0.0.1:7201/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflatnot"))
 	# r = requests.get('http://127.0.0.1:7200/2.data')
 	
 	print(r.status_code)
