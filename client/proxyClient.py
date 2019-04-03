@@ -27,11 +27,12 @@ if __name__ == "__main__":
 	proxy = {"http": proxyaddr, 
 			 "https": sproxyaddr}
 
-	# r = requests.get('http://127.0.0.1:7201', proxies = proxy, auth=("proxy@proxy","theearthisflat"))
-	# r = requests.get('http://127.0.0.1:7204/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflat"), )
-	# r = requests.get('http://127.0.0.1:7201/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflatnot"))
-	r = requests.get('http://192.0.2.17:8080/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflat"))
-	# r = requests.get('http://127.0.0.1:7200/2.data')
+	# r = requests.get('http://127.0.0.1:7205', proxies = proxy, auth=("proxy@proxy","theearthisflat"))
+	# r = requests.get('http://127.0.0.1:7205/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflat"), )
+	# r = requests.get('http://127.0.0.1:7205/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflatnot"))
+	r = requests.get('http://127.0.0.1:7205/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflat"))
+	# r = requests.get('http://127.0.0.1:7205/file.txt', headers={"Cache-Control": "no-store"},proxies = proxy, auth=("proxy@proxy","theearthisflat"))
+	# r = requests.get('http://192.0.2.3:7205/file.txt', proxies = proxy, auth=("proxy@proxy","theearthisflat"))
 	
 	print(r.status_code)
 	print(r.text)

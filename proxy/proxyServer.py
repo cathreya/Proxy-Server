@@ -40,8 +40,8 @@ class ProxyServer:
 		with open("proxyAuth.txt", 'r') as o:
 			auth = o.readline()
 
-		print(auth)
-		print(tok)
+		# print(auth)
+		# print(tok)
 
 		if auth.split(" ")[1].strip() == tok.strip():
 			self.immune = True
@@ -79,7 +79,7 @@ class ProxyServer:
 
 		# print("Address: " + addr + "\nPath: " + path + "\nPort: " + str(port))
 
-		addr,path,port,auth = self.parseRequest(cliReq)
+		addr,path,port,auth,ifNoStore = self.parseRequest(cliReq)
 		requestUrl = "http://" + addr + ":" + str(port) + path
 
 
@@ -125,10 +125,10 @@ class ProxyServer:
 				# print(headerdate)
 				copy_rep = rep.rstrip() + "\r\n" + headerdate + "\r\n\r\n"
 				# print(copy_rep)
-				print(copy_rep.encode("utf_8"))
-				print("FINISHED PRINTING RAW")
-				print(rep.encode("utf_8"))
-				print("FINISHED PRINTING RAW")
+				# print(copy_rep.encode("utf_8"))
+				# print("FINISHED PRINTING RAW")
+				# print(rep.encode("utf_8"))
+				# print("FINISHED PRINTING RAW")
 				
 				destFd.sendall(copy_rep.encode("utf_8"))
 
@@ -137,7 +137,8 @@ class ProxyServer:
 					tmpdata = (destFd.recv(self.maxMessageSize)).decode("utf_8")
 					fakedata += tmpdata
 					if(len(tmpdata) > 0):
-						print(tmpdata)
+						# print(tmpdata)
+						pass
 					else:
 						break
 
@@ -149,7 +150,7 @@ class ProxyServer:
 				else:
 					data = self.getCache(requestUrl)
 					print("-"*20 + "\nDATA FROM CACHE\n" + "-"*20)
-					print(data)
+					# print(data)
 					clientFd.sendall(data)
 					destFd.close()
 					return
@@ -171,14 +172,14 @@ class ProxyServer:
 
 			dataBegin = True
 			
-			print("-"*20 + "\nPART DATA RECEIVED TO PROXY FROM SERVER\n" + "-"*20)
+			print("-"*20 + "\nDATA RECEIVED TO PROXY FROM SERVER\n" + "-"*20)
 			while True:
 				data = destFd.recv(self.maxMessageSize)
 				if(len(data) > 0):
-					print(data)
+					# print(data)
 
 					# Add to cache - if validated
-					self.addCache(requestUrl, data, dataBegin)
+					self.addCache(requestUrl, data, dataBegin, ifNoStore)
 					
 					clientFd.sendall(data)
 					dataBegin = False
@@ -223,7 +224,7 @@ class ProxyServer:
 	
 		return self.cache[requestUrl]
 
-	def addCache(self, requestUrl, data, dataBegin):
+	def addCache(self, requestUrl, data, dataBegin, ifNoStore):
 		'''
 		Checks if data has been requested (more than) thrice in the last 5 
 		minutes. If so, it adds the data to the cache.
@@ -231,6 +232,9 @@ class ProxyServer:
 
 		# Return if less than 3 requests
 		if len(self.cache_timestamp[requestUrl]) < 3:
+			return
+
+		if ifNoStore:
 			return
 		
 		# Return if 3 requests were over 5 minutes
@@ -240,8 +244,8 @@ class ProxyServer:
 
 
 		# Add data to cache
-		print("*****Adding data to cache*****")
 		if dataBegin:
+			print("*****Adding data to cache*****")
 			if not requestUrl in self.cache:
 				self.cache[requestUrl] = ""
 			self.cache[requestUrl] = data
@@ -268,7 +272,7 @@ class ProxyServer:
 		try:
 			with open(blacklist_file, 'r') as f:
 				black_list = f.readlines()
-		except Error:
+		except:
 			print("Error trying to read the files")
 			return False
 
@@ -299,6 +303,10 @@ class ProxyServer:
 		r = request[l:].find("\r\n")
 		l += len("Authorization: Basic ")
 
+		ifNoStore = "Cache-Control: no-store" in request
+
+
+
 
 		auth = request[l:l+r]
 
@@ -324,7 +332,7 @@ class ProxyServer:
 
 
 		
-		return (addr,path,port,auth)
+		return (addr,path,port,auth,ifNoStore)
 
 	def getHeaderDate(self, requestUrl):
 		dat = self.cache_timestamp[requestUrl][-1]
