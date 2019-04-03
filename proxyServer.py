@@ -32,6 +32,15 @@ class ProxyServer:
 
 		print("Listening on port {}".format(port))
 
+	def authenticate(self, tok):
+		with open("proxyAuth.txt", 'r') as o:
+			auth = o.readline()
+
+		print(auth)
+		print(tok)
+
+		return auth.strip() == tok.strip()
+
 	def acceptClients(self):
 		while(True):
 			clientFd, clientAddr = self.servFd.accept()
@@ -51,7 +60,13 @@ class ProxyServer:
 		# print(message[:-2])
 		# print(cliReq)
 
-		addr,path,port = self.getDestServer(cliReq)
+		addr,path,port,auth = self.parseRequest(cliReq)
+
+		if not self.authenticate(auth):
+			print("Auth Failed")
+			clientFd.sendall(b"HTTP/1.1 403 Forbidden\nContent-Type: text/plain\nContent-Length: 21\n\nInvalid Authorization")
+			clientFd.close()
+			return
 
 		
 		rep = cliReq.replace("http://"+addr+":"+str(port)+path, path)
@@ -81,14 +96,15 @@ class ProxyServer:
 			if destFd:
 				destFd.close()
 			if clientFd:
-				clientFd.sendall(b"Error retrieving data from the destination")
+				clientFd.sendall(b"HTTP/1.1 500 Internal Server Error\nContent-Type: text/plain\nContent-Length: 33\n\nError retrieving from destination")
 				clientFd.close()
+					
 
 
 
 
 
-	def getDestServer(self, req):
+	def parseRequest(self, request):
 		# b'GET http://127.0.0.1/ HTTP/1.1\r\n
 		# Host: 127.0.0.1\r\n
 		# User-Agent: python-requests/2.18.4\r\n
@@ -96,9 +112,19 @@ class ProxyServer:
 		# Accept: */*\r\n
 		# Connection: keep-alive\r\n\r\n'
 
-		req = req.split("\r\n")
+		req = request.split("\r\n")
+
 		addr = req[0].split(" ")[1]
 		
+		l = request.find("Authorization: Basic ")
+		if not l:
+			return -1
+		r = request[l:].find("\r\n")
+		l += len("Authorization: Basic ")
+
+
+		auth = request[l:l+r]
+
 		if len(addr.split(":")) < 3:
 			port = 8080
 		else:
@@ -121,7 +147,7 @@ class ProxyServer:
 
 
 		
-		return (addr,path,port)
+		return (addr,path,port,auth)
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
