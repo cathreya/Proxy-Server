@@ -8,6 +8,7 @@ class ProxyServer:
 	def __init__(self,port):
 		self.port = port
 		self.maxMessageSize = 1000000
+		self.cache = {}
 
 		try:
 			self.servFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -51,11 +52,17 @@ class ProxyServer:
 		# print(message[:-2])
 		# print(cliReq)
 
-		addr,path,port = self.getDestServer(cliReq)
-
+		addr, path, port = self.getDestServer(cliReq)
+		print("Address: " + addr + "\nPath: " + path + "\nPort: " + str(port))
+		requestUrl = "http://" + addr + ":" + str(port) + path
 		
-		rep = cliReq.replace("http://"+addr+":"+str(port)+path, path)
+		rep = cliReq.replace(requestUrl, path)
 		print(rep)
+
+		# Won't work with large messages yet
+		if self.checkCache(requestUrl):
+			data = self.getCache(requestUrl)
+			clientFd.sendall(data)
 
 		try:
 			destFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -63,11 +70,14 @@ class ProxyServer:
 			print(addr,port)
 			destFd.connect((addr,port))
 			destFd.sendall(rep.encode("utf_8"))
-
+			dataBegin = True
 			while True:
 				data = destFd.recv(self.maxMessageSize)
 				if(len(data) > 0):
+					print(data)
+					self.addCache(requestUrl, data, dataBegin)
 					clientFd.sendall(data)
+					dataBegin = False
 				else:
 					break
 
@@ -84,8 +94,20 @@ class ProxyServer:
 				clientFd.sendall(b"Error retrieving data from the destination")
 				clientFd.close()
 
+	def checkCache(self, requestUrl):
+		return False
 
+	def getCache(self, requestUrl):
+		return None
 
+	def addCache(self, requestUrl, data, dataBegin):
+		pass
+
+	def blacklisted(self, host):
+		return False
+
+	def parseBlack(self, address):
+		pass
 
 
 	def getDestServer(self, req):
