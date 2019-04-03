@@ -1,5 +1,6 @@
 import socket
 import sys
+import requests
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
@@ -8,16 +9,24 @@ if __name__ == "__main__":
 
 	port = int(sys.argv[1])
 	
-	servFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	# servFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-	servFd.connect(('0.0.0.0',port))
+	# servFd.connect(('0.0.0.0',port))
 
-	message = servFd.recv(1023)
+	# message = servFd.recv(1023)
 
-	print("SERVER SAYS: {}".format(message))
+	# print("SERVER SAYS: {}".format(message))
 
-	servFd.close()
+	# servFd.close()
 
+	# os.system("curl --request %s --proxy 127.0.0.1:%s --local-port %s 127.0.0.1:%s/%s" % (METHOD, PROXY_PORT, CLIENT_PORT, SERVER_PORT, filename))
 
-	
+	proxyaddr = "http://127.0.0.1:{}".format(str(port)) 
+	sproxyaddr = "https://127.0.0.1:{}".format(str(port)) 
+
+	proxy = {"http": proxyaddr, 
+			 "https": sproxyaddr}
+
+	r = requests.get('http://127.0.0.1:7100', proxies = proxy)
+		
 	

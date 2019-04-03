@@ -7,6 +7,7 @@ class ProxyServer:
 
 	def __init__(self,port):
 		self.port = port
+		self.maxMessageSize = 1023
 
 		try:
 			self.servFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -43,10 +44,66 @@ class ProxyServer:
 
 
 	def handleClient(self, clientFd, clientAddr):
-		message = "Welcome to the server"
 
-		clientFd.send(message)
+		message = clientFd.recv(self.maxMessageSize)
 
+		cliReq = str(message)
+		print(cliReq)
+
+		addr,port = self.getDestServer(cliReq)
+
+		try:
+			destFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			destFd.settimeout(1)
+			print(addr,port)
+			destFd.connect((addr,port))
+			destFd.sendall(message)
+
+			while True:
+				data = destFd.recv(self.maxMessageSize)
+				if(len(data) > 0):
+					clientFd.sendall(data)
+				else:
+					break
+
+			destFd.close()
+			clientFd.close()
+			print("Done")
+
+		except Exception as e:
+			print("Error retrieving from destination")
+			print(e)
+			if destFd:
+				destFd.close()
+			if clientFd:
+				clientFd.sendall(b"Error retrieving data from the destination")
+				clientFd.close()
+
+
+
+
+
+	def getDestServer(self, req):
+		# b'GET http://127.0.0.1/ HTTP/1.1\r\n
+		# Host: 127.0.0.1\r\n
+		# User-Agent: python-requests/2.18.4\r\n
+		# Accept-Encoding: gzip, deflate\r\n
+		# Accept: */*\r\n
+		# Connection: keep-alive\r\n\r\n'
+
+		req = req.split("\r\n")
+		addr = req[0].split(" ")[1]
+		
+		if len(addr.split(":")) < 3:
+			port = 8080
+		else:
+			port = int(addr.split(":")[2][:-1])
+			l = addr.find("//")
+			addr = addr[l+2:]
+			r = addr.find(":")
+			addr = addr[:r]
+
+		return (addr,port)
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
