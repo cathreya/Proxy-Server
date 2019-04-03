@@ -7,7 +7,7 @@ class ProxyServer:
 
 	def __init__(self,port):
 		self.port = port
-		self.maxMessageSize = 1023
+		self.maxMessageSize = 1000000
 
 		try:
 			self.servFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -47,17 +47,22 @@ class ProxyServer:
 
 		message = clientFd.recv(self.maxMessageSize)
 
-		cliReq = str(message)
-		print(cliReq)
+		cliReq = message.decode("utf_8")
+		# print(message[:-2])
+		# print(cliReq)
 
-		addr,port = self.getDestServer(cliReq)
+		addr,path,port = self.getDestServer(cliReq)
+
+		
+		rep = cliReq.replace("http://"+addr+":"+str(port)+path, path)
+		print(rep)
 
 		try:
 			destFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			destFd.settimeout(1)
 			print(addr,port)
 			destFd.connect((addr,port))
-			destFd.sendall(message)
+			destFd.sendall(rep.encode("utf_8"))
 
 			while True:
 				data = destFd.recv(self.maxMessageSize)
@@ -97,13 +102,26 @@ class ProxyServer:
 		if len(addr.split(":")) < 3:
 			port = 8080
 		else:
-			port = int(addr.split(":")[2][:-1])
-			l = addr.find("//")
-			addr = addr[l+2:]
-			r = addr.find(":")
-			addr = addr[:r]
+			tmp = addr.split(":")[2]
+			l = tmp.find("/")
+			port = int(tmp[:l])
 
-		return (addr,port)
+
+
+		l = addr.find("//")
+		addr = addr[l+2:]
+		
+
+		path = addr.find("/")
+
+		path = addr[path:]
+
+		r = addr.find(":")
+		addr = addr[:r]
+
+
+		
+		return (addr,path,port)
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:

@@ -27,6 +27,13 @@ if __name__ == "__main__":
 	proxy = {"http": proxyaddr, 
 			 "https": sproxyaddr}
 
-	r = requests.get('http://127.0.0.1:7100', proxies = proxy)
-		
+	r = requests.get('http://127.0.0.1:7201/file.txt', proxies = proxy)
+	# r = requests.get('http://127.0.0.1:7200/2.data')
+	
+	print(r.text)
+	print("\n")
+
+	copied = open("copy","wb")
+	copied.write(r.text.encode("utf_8"))
+	copied.close()
 	
