@@ -104,10 +104,57 @@ class ProxyServer:
 		pass
 
 	def blacklisted(self, host):
-		return False
+		blacklist_file = "blacklist.txt"
+
+		try:
+			with open(blacklist_file, 'r') as f:
+				b_list = f.readlines() # read file into list
+		except IOError:
+			print("{} not found; unable to check for blacklisting".format(blacklist_file))
+			return False # return not blacklisted
+
+		ip = socket.gethostbyname(host) # get ip of client requested url
+		ip = parseBlack(ip)
+
+		for cidr in b_list:
+			flag = True
+			c = parseBlack(cidr)
+
+			for i in range(len(c)):
+				if c[i] != ip[i]:
+					flag = False
+					break 
+
+			if flag:
+				return flag
+					
+		return flag
 
 	def parseBlack(self, address):
-		pass
+		cidr_flag = address.find("/")
+
+		if cidr_flag == -1:
+			domain = address
+			cidr_flag = False
+		else:
+			domain = address[:cidr_flag]
+			sig = int(address[(cidr_flag + 1):])
+		
+		domain = domain.split(".")
+		for i in range(len(domain)):
+			domain[i] = format(int(domain[i]), 'b') # convert segment to binary string
+
+			temp = ""
+			if len(domain[i]) < 8:
+				for j in range(8 - len(domain[i])):
+					temp += "0"
+			domain[i] = temp + domain[i] # convert to 8 bit binary string
+		domain = "".join(domain)
+
+		if cidr_flag:
+			return domain[:sig] # cutoff at sig if cidr
+		
+		return domain
 
 
 	def getDestServer(self, req):
